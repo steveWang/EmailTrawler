@@ -4,6 +4,19 @@ from urllib.parse import urlparse, urljoin
 import sys
 import re
 
+class Scraper():
+    def __init__(self):
+        self.s = requests.Session()
+
+    def go(self, url):
+        return self.s.get(url).text
+
+# Filter out images and compressed files that probably don't have emails in
+# metadata. regex is probably overkill and can lead to poor performance,
+# but network io is likely a larger bottleneck.
+def is_web_page(url):
+    return not re.search('(?i)\.(?:jpe?g|tiff?|bmp|rar|gif|png|zip|torrent|gz|bz2|gzip)$', url)
+
 LOCAL_HELPER = r'[a-zA-Z!#$%&\'*+-/=?^_`|~]+'
 LOCALPART = r'(?:(?:%s\.)*%s|"(?:[a-zA-Z!#$%%&\'*+-/=?^_`{|}~.]+)")' % (LOCAL_HELPER, LOCAL_HELPER)
 LABEL = r'(?!-)[a-zA-Z0-9\-]{1,63}(?<!-)'
@@ -16,13 +29,6 @@ DOMAINPART = r'(?:%s\.)+%s' % (LABEL, LABEL)
 # it requires at least two labels in a domain name, and braces (i.e. {})
 # are not valid characters in an email address.
 EMAIL_PATTERN = re.compile('%s@%s' % (LOCALPART, DOMAINPART))
-
-class Scraper():
-    def __init__(self):
-        self.s = requests.Session()
-
-    def go(self, url):
-        return self.s.get(url).text
 
 scraper = Scraper()
 
@@ -51,10 +57,10 @@ while len(queue):
     for a in soup.findAll('a'):
         if not a.has_attr('href'):
             continue
-        linked_url = urljoin(url, a['href'])
-        # Only add each item to queue once, to reduce outer loop iterations.
+        linked_url = urljoin(url, a['href']).rsplit('#', 1)[0]
         linked_origin = urlparse(linked_url).netloc
-        if linked_url not in seen_pages and linked_origin == origin:
+        # Only add each item to queue once, to reduce outer loop iterations.
+        if linked_url not in seen_pages and linked_origin == origin and is_web_page(linked_url):
             seen_pages.add(linked_url)
             queue.append(linked_url)
 
