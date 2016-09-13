@@ -1,5 +1,6 @@
 from selenium import webdriver
 from urllib.parse import urlparse, urljoin
+import argparse
 import sys
 import re
 
@@ -15,7 +16,7 @@ class Scraper():
 # metadata. regex is probably overkill and can lead to poor performance,
 # but network io is likely a larger bottleneck.
 def is_web_page(url):
-    return not re.search('(?i)\.(?:jpe?g|tiff?|bmp|rar|gif|png|zip|torrent|gz|bz2|gzip|docx?|xlsx?|pptx?|pdf|tex|dvi|ps|au|tar|ics)$', url)
+    return not re.search('(?i)\.(?:jpe?g|tiff?|bmp|rar|gif|png|zip|torrent|gz|bz2|gzip|docx?|xlsx?|pptx?|pdf|tex|dvi|ps|au|tar|ics|mov|avi|m4v|gph|dta|ram|asx|mp3|rtf|csv)$', url)
 
 def is_same_origin(o1, o2):
     # Pretend www.X is the same origin as X.
@@ -36,17 +37,19 @@ DOMAINPART = r'(?:%s\.)+%s' % (LABEL, LABEL)
 # are not valid characters in an email address.
 EMAIL_PATTERN = re.compile('%s@%s' % (LOCALPART, DOMAINPART))
 
-if len(sys.argv) < 2:
-    # abort with informative message.
-    print("Usage: python trawler.py example.com")
-    sys.exit()
+parser = argparse.ArgumentParser(description='Crawl the specified origin.')
+parser.add_argument('origin', metavar='origin', type=str, help='An origin (defaults to http if protocol not specified).')
+parser.add_argument('--results', metavar='results', type=int, default=10, help='Stop after finding at least this many email addresses or running out of pages to crawl. [default: 10]')
+parser.add_argument('--pages', metavar='pages', type=int, default=100, help='Stop after crawling at most this many pages. [default: 100]')
+
+args = parser.parse_args()
 
 scraper = Scraper()
 
-# Don't override specified schemes.
-start_url = sys.argv[1]
+start_url = args.origin
 if start_url.find('://') == -1:
     start_url = 'http://%s' % start_url
+
 
 # Set start_url and consequently origin based on redirects.
 scraper.go(start_url)
@@ -59,7 +62,12 @@ seen_pages = set(queue)
 seen_emails = set()
 
 # DFS to explore unseen URLs. [].append and [].pop implement this for us.
-while len(queue):
+visited_page_count = 0
+while len(queue) and len(seen_emails) < args.results:
+    if visited_page_count >= args.pages:
+        break
+
+    visited_page_count += 1
     url = queue.pop()
     text = scraper.go(url)
     url = scraper.s.current_url
@@ -85,4 +93,5 @@ while len(queue):
             seen_pages.add(linked_url)
             queue.append(linked_url)
 
+scraper.s.quit()
 print('\n'.join(seen_emails))
