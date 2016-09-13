@@ -1,2 +1,2 @@
 bs4 (BeautifulSoup)
-requests
+selenium (implicit requirement: Chrome)

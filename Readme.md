@@ -1,6 +1,5 @@
 As detailed in requirements.txt, this script relies on BeautifulSoup and
-requests. I apparently forgot about Scrapy until after implementing
-everything.
+Selenium Webdriver (using the Chrome webdriver).
 
 Command-line usage is fairly simple: just invoke as follows:
 
