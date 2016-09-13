@@ -1,4 +1,3 @@
-from bs4 import BeautifulSoup
 from selenium import webdriver
 from urllib.parse import urlparse, urljoin
 import sys
@@ -12,11 +11,11 @@ class Scraper():
         self.s.get(url)
         return self.s.page_source
 
-# Filter out images and compressed files that probably don't have emails in
+# Filter out various downloadable files that probably don't have emails in
 # metadata. regex is probably overkill and can lead to poor performance,
 # but network io is likely a larger bottleneck.
 def is_web_page(url):
-    return not re.search('(?i)\.(?:jpe?g|tiff?|bmp|rar|gif|png|zip|torrent|gz|bz2|gzip)$', url)
+    return not re.search('(?i)\.(?:jpe?g|tiff?|bmp|rar|gif|png|zip|torrent|gz|bz2|gzip|docx?|xlsx?|pptx?|pdf|tex|dvi|ps|au|tar|ics)$', url)
 
 def is_same_origin(o1, o2):
     # Pretend www.X is the same origin as X.
@@ -24,8 +23,8 @@ def is_same_origin(o1, o2):
         o1, o2 = o2, o1
     return o1 == o2 or o1 == "www." + o2
 
-LOCAL_HELPER = r'[a-zA-Z!#$%&\'*+-/=?^_`|~]+'
-LOCALPART = r'(?:(?:%s\.)*%s|"(?:[a-zA-Z!#$%%&\'*+-/=?^_`{|}~.]+)")' % (LOCAL_HELPER, LOCAL_HELPER)
+LOCAL_HELPER = r'[a-zA-Z+\-_]{,250}'
+LOCALPART = r'(?:(?:%s\.)*%s|"(?:[a-zA-Z+\-_\.]+)")' % (LOCAL_HELPER, LOCAL_HELPER)
 LABEL = r'(?!-)[a-zA-Z0-9\-]{1,63}(?<!-)'
 DOMAINPART = r'(?:%s\.)+%s' % (LABEL, LABEL)
 
@@ -66,13 +65,20 @@ while len(queue):
     url = scraper.s.current_url
 
     # Debatable whether to add these if url changed from a redirect.
+    curr_origin = urlparse(url).netloc
+    if not is_same_origin(origin, curr_origin):
+        continue
+    
     seen_emails |= set(EMAIL_PATTERN.findall(text))
 
-    soup = BeautifulSoup(text, 'html.parser')
-    for a in soup.findAll('a'):
-        if not a.has_attr('href'):
+    for a in scraper.s.find_elements_by_tag_name('a'):
+        try:
+            href = a.get_attribute('href')
+        except:
             continue
-        linked_url = urljoin(url, a['href']).rsplit('#', 1)[0]
+        if href == None:
+            continue
+        linked_url = urljoin(url, href).rsplit('#', 1)[0]
         linked_origin = urlparse(linked_url).netloc
         # Only add each item to queue once, to reduce outer loop iterations.
         if linked_url not in seen_pages and is_same_origin(origin, linked_origin) and is_web_page(linked_url):
